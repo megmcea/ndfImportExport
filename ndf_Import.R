@@ -2,13 +2,15 @@
 library(xml2)
 
 # Specify the file path.
-file_path <- "x axis.ndf"
+file_path <- "x axis.ndf" ##MM update this with relative file paths
 
 # ---------------------------
 # Step 1: Read the Header
 # ---------------------------
 # Increase the number of header bytes to ensure we capture the full header.
-header_bytes_to_read <- 8192
+file_size <- file.info(file_path)$size
+
+header_bytes_to_read <-round(file_size/100) #8192 #MM: what determines this #? I changed it to be be a generic 1% of total file size
 
 con <- file(file_path, "rb")
 header_raw <- readBin(con, what = "raw", n = header_bytes_to_read)
@@ -51,7 +53,7 @@ if (is.na(pattern_index)) {
 xml_bytes <- header_raw[xml_start_index:pattern_index]
 
 # Because the XML header is in UTF-16LE (each character stored with an interleaved null),
-# extract every other byte (this works if the text is plain ASCII).
+# extract every other byte (this works if the text is plain ASCII) and convert to character strings:
 xml_bytes_ascii <- xml_bytes[seq(1, length(xml_bytes), by = 2)]
 xml_string <- rawToChar(xml_bytes_ascii)
 cat("Extracted XML header:\n", xml_string, "\n")
@@ -62,17 +64,19 @@ cat("Extracted XML header:\n", xml_string, "\n")
 # Parse the XML string using the xml2 package.
 doc <- read_xml(xml_string)
 
-# Extract metadata variables from the XML.
+# Extract metadata variables from the XML using xml text which returns a character string
 channel_name <- xml_text(xml_find_first(doc, "//Name"))
 channel_label <- xml_text(xml_find_first(doc, "//Label"))
 source_type   <- xml_text(xml_find_first(doc, "//SourceType"))
 unit          <- xml_text(xml_find_first(doc, "//Unit"))
+samp_rate     <- xml_text(xml_find_first(doc, "//SamplingRate")) 
 
 # Print extracted metadata for confirmation.
-cat("Channel Name: ", channel_name, "\n")
+cat("Channel Name: ", channel_name, "\n") #MM: "\n" means new line
 cat("Channel Label:", channel_label, "\n")
 cat("Source Type:  ", source_type, "\n")
 cat("Unit:         ", unit, "\n")
+cat("Sampling Rate " , samp_rate, "\n")
 
 # ---------------------------
 # Step 3: Read the Waveform Data
@@ -81,15 +85,15 @@ cat("Unit:         ", unit, "\n")
 header_length <- pattern_index
 
 # Get the total file size and compute the number of bytes for the waveform data.
-file_size <- file.info(file_path)$size
-data_bytes <- file_size - header_length
+#file_size <- file.info(file_path)$size moved this to above
+data_bytes_length <- file_size - header_length
 
 # Open a binary connection to the file and move the pointer to the end of the header.
-con <- file(file_path, "rb")
+con <- file(file_path, "rb") #rb means read binary mode; can grab information from this using $
 seek(con, where = header_length, origin = "start")
 
 # Read the waveform data (assumed to be stored as 16-bit signed integers in little-endian format).
-waveform <- readBin(con, what = "integer", size = 2, n = data_bytes / 2, endian = "little")
+waveform <- readBin(con, what = "integer", size = 2, n = data_bytes_length / 2, endian = "little")
 close(con)
 
 # Create a data frame with sample indices and the waveform data.
